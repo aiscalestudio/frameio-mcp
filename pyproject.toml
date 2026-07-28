@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "frameio-mcp"
+version = "0.1.0"
+description = "Frame.io MCP server for Claude — post comments, list comments, upload attachments, pull transcripts."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [
+    { name = "Laura Lacurezeanu", email = "example@mail.com" },
+]
+keywords = ["mcp", "frameio", "claude", "video", "editing", "post-production"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "httpx>=0.27",
+    "pydantic>=2.5",
+    "click>=8.1",
+    "python-dotenv>=1.0",
+    "srt>=3.5",
+    "webvtt-py>=0.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-mock>=3.12",
+    "respx>=0.20",
+    "build>=1.0",
+]
+
+[project.scripts]
+frameio-mcp = "frameio_mcp.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/aiscalestudio/frameio-mcp"
+Repository = "https://github.com/aiscalestudio/frameio-mcp"
+Issues = "https://github.com/aiscalestudio/frameio-mcp/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/frameio_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

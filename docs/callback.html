@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frame.io MCP — Authorization</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 640px;
+      margin: 4rem auto;
+      padding: 0 1.5rem;
+      color: #1E1B4B;
+      background: #f8fdfd;
+      line-height: 1.5;
+    }
+    h1 { color: #4B2E83; font-size: 1.75rem; margin-bottom: 0.5rem; }
+    .subtitle { color: #5B5896; margin-top: 0; margin-bottom: 2rem; }
+    .code-box {
+      background: #ffffff;
+      border: 2px solid #4B2E83;
+      border-radius: 10px;
+      padding: 1.25rem;
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 0.95rem;
+      word-break: break-all;
+      user-select: all;
+      margin-bottom: 1rem;
+    }
+    button {
+      background: #4B2E83;
+      color: white;
+      border: 0;
+      padding: 0.7rem 1.4rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { background: #3d2569; }
+    button.copied { background: #22c55e; }
+    .state { color: #5B5896; font-size: 0.85rem; margin-top: 1.5rem; }
+    .state code { background: #eef5f7; padding: 0.15rem 0.4rem; border-radius: 4px; }
+    .error {
+      background: #fef2f2;
+      border: 2px solid #dc2626;
+      border-radius: 10px;
+      padding: 1.25rem;
+      color: #991b1b;
+    }
+    .footer { color: #8a86b8; font-size: 0.85rem; margin-top: 3rem; }
+    .footer a { color: #4B2E83; }
+  </style>
+</head>
+<body>
+  <div id="content"></div>
+  <div class="footer">
+    Frame.io MCP · <a href="https://github.com/aiscalestudio/frameio-mcp">github.com/aiscalestudio/frameio-mcp</a>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    const error = params.get('error');
+    const errorDescription = params.get('error_description');
+    const content = document.getElementById('content');
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    if (error) {
+      content.innerHTML =
+        '<h1>Authorization failed</h1>' +
+        '<div class="error">' +
+        '<p><strong>Error:</strong> ' + escapeHtml(error) + '</p>' +
+        '<p>' + escapeHtml(errorDescription || 'No additional details provided.') + '</p>' +
+        '</div>' +
+        '<p>Close this tab and run <code>frameio-mcp login</code> again on your machine.</p>';
+    } else if (code) {
+      content.innerHTML =
+        '<h1>Authorized ✓</h1>' +
+        '<p class="subtitle">Copy the code below and paste it into your terminal where <code>frameio-mcp login</code> is waiting.</p>' +
+        '<div class="code-box" id="code">' + escapeHtml(code) + '</div>' +
+        '<button id="copy-btn">Copy code</button>' +
+        '<p class="state">State: <code>' + escapeHtml(state || '(none)') + '</code></p>';
+      document.getElementById('copy-btn').addEventListener('click', function() {
+        const codeText = document.getElementById('code').innerText;
+        navigator.clipboard.writeText(codeText).then(() => {
+          this.textContent = 'Copied ✓';
+          this.classList.add('copied');
+        }).catch(() => {
+          this.textContent = 'Copy failed — select the code manually';
+        });
+      });
+    } else {
+      content.innerHTML =
+        '<h1>Frame.io MCP OAuth Relay</h1>' +
+        '<p>This page receives OAuth callbacks from Adobe. Run <code>frameio-mcp login</code> on your machine to start the flow.</p>';
+    }
+  </script>
+</body>
+</html>
