@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json as jsonlib
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -31,10 +31,22 @@ class FrameIOClient:
 
     MAX_RETRIES = 4
 
-    def __init__(self, config: Config, tokens: Optional[Tokens] = None):
+    def __init__(
+        self,
+        config: Config,
+        tokens: Tokens | None = None,
+        auto_refresh_on_401: bool = True,
+    ):
+        """
+        `auto_refresh_on_401` exists for diagnostics. Frame.io returns 401 both for an
+        expired token and for a token that was never authorized for v4, and the refresh
+        path turns the second case into a misleading "re-authenticate" error. Turning it
+        off lets a caller see the original 401 as-is.
+        """
         self.config = config
         self._tokens = tokens
-        self._client: Optional[httpx.AsyncClient] = None
+        self._auto_refresh_on_401 = auto_refresh_on_401
+        self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> FrameIOClient:
         if self._tokens is None:
@@ -61,12 +73,12 @@ class FrameIOClient:
         method: str,
         path: str,
         *,
-        params: Optional[dict] = None,
-        json: Optional[dict] = None,
+        params: dict | None = None,
+        json: dict | None = None,
         retry_count: int = 0,
     ) -> dict:
         """Make an authenticated request. Handles 401 (refresh + retry) and 429 (backoff)."""
-        assert self._client is not None, "Client not initialized — use `async with FrameIOClient(...)`"
+        assert self._client is not None, "Not initialized: use `async with FrameIOClient(...)`"
         assert self._tokens is not None, "No tokens available"
 
         await self._ensure_fresh_token()
@@ -77,7 +89,7 @@ class FrameIOClient:
         )
 
         # 401 → force a fresh refresh and retry once
-        if response.status_code == 401 and retry_count == 0:
+        if response.status_code == 401 and retry_count == 0 and self._auto_refresh_on_401:
             self._tokens = await refresh_tokens(self.config, self._tokens)
             save_tokens(self._tokens, self.config.tokens_path)
             return await self._request(
@@ -141,7 +153,7 @@ class FrameIOClient:
         account_id: str,
         folder_id: str,
         page_size: int = 100,
-        after: Optional[str] = None,
+        after: str | None = None,
     ) -> dict:
         """List a folder's direct children. Returns {data: [...], links: {next?}}."""
         params: dict[str, Any] = {"page_size": page_size}
@@ -167,8 +179,8 @@ class FrameIOClient:
         account_id: str,
         file_id: str,
         text: str,
-        timestamp_microseconds: Optional[int] = None,
-        duration_microseconds: Optional[int] = None,
+        timestamp_microseconds: int | None = None,
+        duration_microseconds: int | None = None,
     ) -> dict:
         """Post a comment on a file. `timestamp_microseconds` anchors it to a specific frame."""
         payload: dict[str, Any] = {"data": {"text": text}}
@@ -185,7 +197,7 @@ class FrameIOClient:
         account_id: str,
         file_id: str,
         page_size: int = 50,
-        after: Optional[str] = None,
+        after: str | None = None,
     ) -> dict:
         """List comments on a file. Returns {data: [...], links: {next?}, total_count?}."""
         params: dict[str, Any] = {"page_size": page_size, "include_total_count": "true"}
@@ -211,7 +223,7 @@ class FrameIOClient:
         media_type: str,
         file_size: int,
     ) -> dict:
-        """Step 1 of attachment upload: create the attachment record. Returns presigned upload URL."""
+        """Step 1 of attachment upload: create the record. Returns a presigned upload URL."""
         payload = {
             "data": {
                 "name": file_name,

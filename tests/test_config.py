@@ -6,7 +6,37 @@ from pathlib import Path
 
 import pytest
 
-from frameio_mcp.config import Config
+from frameio_mcp.config import DEFAULT_SCOPES, REQUIRED_V4_SCOPES, Config
+
+
+def test_default_scopes_include_everything_frameio_v4_needs():
+    """Frame.io v4 rejects IMS tokens that lack role claims.
+
+    v2 endpoints accept a bare `openid` token, so a missing scope shows up only as a
+    blanket 401 on every v4 call. Adobe requires `additional_info.roles` plus `email`
+    and `profile` for v4 authorization to resolve.
+    """
+    granted = {s.strip() for s in DEFAULT_SCOPES.split(",")}
+    assert granted >= REQUIRED_V4_SCOPES, (
+        f"Missing v4 scopes: {sorted(REQUIRED_V4_SCOPES - granted)}"
+    )
+
+
+def test_default_scopes_have_no_stray_whitespace():
+    """Adobe IMS takes a comma-separated list; stray spaces break the authorize URL."""
+    assert " " not in DEFAULT_SCOPES
+    assert not DEFAULT_SCOPES.startswith(",")
+    assert not DEFAULT_SCOPES.endswith(",")
+
+
+def test_config_scopes_default_to_module_default():
+    c = Config(
+        client_id="c",
+        client_secret="s",
+        oauth_relay_url="https://example.invalid/cb",
+        tokens_path=Path("/tmp/t.json"),
+    )
+    assert c.scopes == DEFAULT_SCOPES
 
 
 def test_from_env_reads_required_vars(monkeypatch):

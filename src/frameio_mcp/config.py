@@ -8,7 +8,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-
 # Load .env from CWD if present; also try ~/.frameio-mcp/.env
 load_dotenv()
 load_dotenv(dotenv_path=Path.home() / ".frameio-mcp" / ".env", override=False)
@@ -17,15 +16,41 @@ load_dotenv(dotenv_path=Path.home() / ".frameio-mcp" / ".env", override=False)
 # Adobe IMS endpoints
 ADOBE_IMS_AUTHORIZE_URL = "https://ims-na1.adobelogin.com/ims/authorize/v2"
 ADOBE_IMS_TOKEN_URL = "https://ims-na1.adobelogin.com/ims/token/v3"
+ADOBE_IMS_DISCOVERY_URL = (
+    "https://ims-na1.adobelogin.com/.well-known/openid-configuration"
+)
 
 # Frame.io v4 API
 FRAMEIO_API_BASE_URL = "https://api.frame.io/v4"
 
-# Default OAuth scopes. Note: `offline_access` is critical — without it, we don't get
-# a refresh token and users re-auth every 24 hours. Frame.io API access is enabled by
-# the Adobe project having the Frame.io API added; we don't need to request it explicitly
-# by scope name. Users can override via FRAMEIO_SCOPES env var if their setup needs more.
-DEFAULT_SCOPES = "openid,AdobeID,offline_access"
+# Scopes Frame.io v4 authorization depends on.
+#
+# `additional_info.roles` is the one that bites: without it IMS still issues a
+# perfectly valid token, v2 endpoints keep working, and every v4 endpoint returns a
+# blanket 401 with no hint that a scope is missing. `email` and `profile` are needed
+# alongside it for v4 to resolve the user. `offline_access` is what earns a refresh
+# token, without which users re-authenticate daily.
+REQUIRED_V4_SCOPES = frozenset(
+    {"openid", "email", "profile", "offline_access", "additional_info.roles"}
+)
+
+# Adobe IMS expects a comma-separated list with no spaces.
+DEFAULT_SCOPES = "openid,email,profile,offline_access,additional_info.roles"
+
+
+def resolve_tokens_path() -> Path:
+    """Where tokens live, resolved without requiring Adobe credentials.
+
+    Commands that only touch the local token file (logout, status) should not fail
+    because a client secret is absent. Deleting a token you already have does not
+    require credentials to obtain a new one.
+    """
+    return Path(
+        os.getenv(
+            "FRAMEIO_TOKENS_PATH",
+            str(Path.home() / ".frameio-mcp" / "tokens.json"),
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -45,10 +70,7 @@ class Config:
             "FRAMEIO_OAUTH_RELAY_URL",
             "https://aiscalestudio.github.io/frameio-mcp/callback.html",
         )
-        tokens_path_str = os.getenv(
-            "FRAMEIO_TOKENS_PATH",
-            str(Path.home() / ".frameio-mcp" / "tokens.json"),
-        )
+        tokens_path_str = str(resolve_tokens_path())
         scopes = os.getenv("FRAMEIO_SCOPES", DEFAULT_SCOPES)
 
         missing = []
@@ -57,7 +79,7 @@ class Config:
         if not client_secret:
             missing.append("FRAMEIO_CLIENT_SECRET")
         if missing:
-            raise EnvironmentError(
+            raise OSError(
                 f"Missing required env vars: {', '.join(missing)}. "
                 f"Copy .env.example to .env and fill in your Adobe Developer Console credentials."
             )
