@@ -1,0 +1,4 @@
+# Vercel installs from this file. Installing the local package with its `server`
+# extra keeps pyproject.toml the single source of truth for versions, rather than
+# maintaining a second list that silently drifts out of sync.
+.[server]
