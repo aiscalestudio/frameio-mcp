@@ -49,9 +49,9 @@ def _describe_token(raw: str) -> str:
         return "undecodable payload"
     return (
         f"type={claims.get('type')} "
-        f"iss={claims.get('iss')} "
         f"client_id={claims.get('client_id')} "
-        f"has_jti={'jti' in claims}"
+        f"scope={claims.get('scope')!r} "
+        f"user_id={claims.get('user_id')}"
     )
 
 
