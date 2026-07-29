@@ -101,12 +101,12 @@ async def test_500_raises_frameio_error():
 
 
 @respx.mock
-async def test_create_comment_sends_microseconds():
+async def test_create_comment_sends_a_frame_number():
     route = respx.post(
         f"{FRAMEIO_API_BASE_URL}/accounts/acct-1/files/file-1/comments"
     ).mock(
         return_value=httpx.Response(
-            201, json={"data": {"id": "comment-1", "text": "hi", "timestamp": 1500000}}
+            201, json={"data": {"id": "comment-1", "text": "hi", "timestamp": 270}}
         )
     )
 
@@ -115,12 +115,12 @@ async def test_create_comment_sends_microseconds():
             account_id="acct-1",
             file_id="file-1",
             text="hi",
-            timestamp_microseconds=1_500_000,
+            timestamp_frames=270,
         )
 
     assert result["id"] == "comment-1"
     body = jsonlib.loads(route.calls.last.request.content)
-    assert body == {"data": {"text": "hi", "timestamp": 1500000}}
+    assert body == {"data": {"text": "hi", "timestamp": 270}}
 
 
 @respx.mock

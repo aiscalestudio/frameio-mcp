@@ -188,7 +188,7 @@ async def check_v4_write_comment(
             account_id=account_id,
             file_id=file_id,
             text=text,
-            timestamp_microseconds=0,
+            timestamp_frames=0,
         )
     except FrameIOError as e:
         return CheckResult(

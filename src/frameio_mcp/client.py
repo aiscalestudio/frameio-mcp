@@ -131,10 +131,19 @@ class FrameIOClient:
     # Files / Folders
     # ---------------------------------------------------------------
 
-    async def get_file(self, account_id: str, file_id: str) -> dict:
-        """Retrieve a single file's metadata (including parent_id, name, media_type)."""
+    async def get_file(
+        self, account_id: str, file_id: str, include_metadata: bool = False
+    ) -> dict:
+        """Retrieve a single file (parent_id, name, media_type, ...).
+
+        `include_metadata` adds the technical metadata block, which is the only place
+        Frame.io v4 exposes frame rate and duration. Without it the response has no
+        duration field at all. Frame rate is required to convert comment timestamps,
+        since Frame.io stores those in frames.
+        """
+        params = {"include": "metadata"} if include_metadata else None
         return (await self._request(
-            "GET", f"/accounts/{account_id}/files/{file_id}"
+            "GET", f"/accounts/{account_id}/files/{file_id}", params=params
         )).get("data", {})
 
     async def list_folder_children(
@@ -168,15 +177,19 @@ class FrameIOClient:
         account_id: str,
         file_id: str,
         text: str,
-        timestamp_microseconds: int | None = None,
-        duration_microseconds: int | None = None,
+        timestamp_frames: int | None = None,
+        duration_frames: int | None = None,
     ) -> dict:
-        """Post a comment on a file. `timestamp_microseconds` anchors it to a specific frame."""
+        """Post a comment on a file.
+
+        `timestamp_frames` is a frame number, not microseconds. Frame.io v4 stores
+        comment positions in frames at the file's frame rate; see media_info.py.
+        """
         payload: dict[str, Any] = {"data": {"text": text}}
-        if timestamp_microseconds is not None:
-            payload["data"]["timestamp"] = timestamp_microseconds
-        if duration_microseconds is not None:
-            payload["data"]["duration"] = duration_microseconds
+        if timestamp_frames is not None:
+            payload["data"]["timestamp"] = timestamp_frames
+        if duration_frames is not None:
+            payload["data"]["duration"] = duration_frames
         return (await self._request(
             "POST", f"/accounts/{account_id}/files/{file_id}/comments", json=payload
         )).get("data", {})

@@ -5,6 +5,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from ..client import FrameIOClient, FrameIOError
+from ..media_info import duration_seconds_of, frame_rate_of
 
 
 def parse_frameio_url(url: str) -> dict:
@@ -66,7 +67,9 @@ async def get_asset_from_url(access_token: str, url: str) -> dict:
             if not account_id:
                 continue
             try:
-                file_data = await client.get_file(account_id, file_id)
+                file_data = await client.get_file(
+                    account_id, file_id, include_metadata=True
+                )
                 used_account_id = account_id
                 break
             except FrameIOError as e:
@@ -80,8 +83,9 @@ async def get_asset_from_url(access_token: str, url: str) -> dict:
                 f"Check the URL and your permissions. Last error: {last_error}"
             )
 
-    duration_us = file_data.get("duration")
-    duration_seconds = (duration_us / 1_000_000) if duration_us else None
+    # Duration and frame rate live only in the metadata block. The plain file endpoint
+    # has no duration field at all, which is why this previously always reported None.
+    duration_seconds = duration_seconds_of(file_data)
 
     project = file_data.get("project") or {}
     return {
@@ -92,4 +96,5 @@ async def get_asset_from_url(access_token: str, url: str) -> dict:
         "file_name": file_data.get("name"),
         "media_type": file_data.get("media_type"),
         "duration_seconds": duration_seconds,
+        "frame_rate": frame_rate_of(file_data),
     }
