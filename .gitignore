@@ -56,3 +56,9 @@ tokens-*.json
 
 # Spike scratch storage
 .spike-storage/
+
+# Added by `vercel link`
+.vercel
+.env*
+# ...but the documented template must stay in the repo.
+!.env.example
