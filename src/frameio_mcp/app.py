@@ -62,6 +62,17 @@ def build_auth(config: ServerConfig, client_storage: Any | None = None) -> OIDCP
         required_scopes=config.required_scopes,
         jwt_signing_key=config.jwt_signing_key,
         client_storage=client_storage or build_client_storage(config),
+        # Adobe's access token is JWT-shaped but not verifiable: it is signed with
+        # `kid: ims_na1-key-at-1`, which is absent from the JWKS at /ims/keys, and it
+        # carries no iss, aud, or exp claims (it uses created_at/expires_in as
+        # millisecond strings instead). Verifying it fails, so the server rejected the
+        # very credentials it had just issued.
+        #
+        # The id_token is a conforming OIDC JWT signed with the published `ims` key, so
+        # verify that instead. FastMCP then patches the resulting AccessToken.token back
+        # to the upstream *access* token, which is what Frame.io requires, so the tools
+        # are unaffected.
+        verify_id_token=True,
     )
 
 

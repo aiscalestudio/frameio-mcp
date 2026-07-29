@@ -53,6 +53,29 @@ class TestAuthWiring:
         auth = build_auth(config, client_storage=MemoryStore())
         assert "additional_info.roles" in auth.required_scopes
 
+    def test_verifies_the_id_token_not_the_access_token(self, config):
+        """Adobe's access token cannot be verified as a JWT.
+
+        It is signed with `kid: ims_na1-key-at-1`, which the JWKS at /ims/keys does not
+        publish, and it has no iss, aud, or exp claims. Verifying it makes the server
+        reject the credentials it just issued, which surfaces to the user as
+        "your account was authorized, but the integration rejected the credentials".
+
+        The id_token is a conforming OIDC JWT signed with the published `ims` key.
+        """
+        auth = build_auth(config, client_storage=MemoryStore())
+        assert auth._verify_id_token is True
+
+    def test_tools_still_receive_the_access_token(self, config):
+        """Verifying the id_token must not change which token reaches Frame.io.
+
+        FastMCP patches AccessToken.token back to the upstream access token when an
+        alternate token is verified. If that ever stopped happening, every tool would
+        send an id_token to Frame.io and get a 401.
+        """
+        auth = build_auth(config, client_storage=MemoryStore())
+        assert auth._uses_alternate_verification() is True
+
 
 class TestOAuthMetadata:
     def test_publishes_authorization_server_metadata(self, client):
