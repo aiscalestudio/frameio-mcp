@@ -10,7 +10,6 @@ import srt
 import webvtt
 
 from ..client import FrameIOClient
-from ..config import Config
 
 # Speaker labels in Frame.io Speaker ID exports look like "[Speaker 1]: text"
 _SPEAKER_RE = re.compile(r"^\s*\[([^\]]+)\]:\s*(.*)$", re.DOTALL)
@@ -87,11 +86,12 @@ def _extract_download_url(file_data: dict) -> str | None:
     return None
 
 
-async def get_transcript_from_sibling(account_id: str, file_id: str) -> dict:
+async def get_transcript_from_sibling(
+    access_token: str, account_id: str, file_id: str
+) -> dict:
     """Find the SRT/VTT transcript in the same folder as the video, download and parse it."""
-    config = Config.from_env()
 
-    async with FrameIOClient(config) as client:
+    async with FrameIOClient(access_token) as client:
         # 1. Get the video's parent folder
         video = await client.get_file(account_id, file_id)
         parent_id = video.get("parent_id")

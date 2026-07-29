@@ -5,7 +5,6 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from ..client import FrameIOClient, FrameIOError
-from ..config import Config
 
 
 def parse_frameio_url(url: str) -> dict:
@@ -35,7 +34,7 @@ def parse_frameio_url(url: str) -> dict:
     return result
 
 
-async def get_asset_from_url(url: str) -> dict:
+async def get_asset_from_url(access_token: str, url: str) -> dict:
     """Resolve a Frame.io URL by parsing it, then hydrating file metadata via the API."""
     parsed = parse_frameio_url(url)
 
@@ -49,9 +48,8 @@ async def get_asset_from_url(url: str) -> dict:
         )
 
     file_id = parsed["file_id"]
-    config = Config.from_env()
 
-    async with FrameIOClient(config) as client:
+    async with FrameIOClient(access_token) as client:
         accounts = await client.list_accounts()
         if not accounts:
             raise ValueError(

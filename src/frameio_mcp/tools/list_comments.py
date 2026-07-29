@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from ..client import FrameIOClient
-from ..config import Config
 
 
 def _format_comment(c: dict) -> dict:
@@ -23,6 +22,7 @@ def _format_comment(c: dict) -> dict:
 
 
 async def list_comments(
+    access_token: str,
     account_id: str,
     file_id: str,
     page_size: int = 50,
@@ -33,8 +33,7 @@ async def list_comments(
     if not (1 <= page_size <= 100):
         raise ValueError(f"page_size must be between 1 and 100, got {page_size}")
 
-    config = Config.from_env()
-    async with FrameIOClient(config) as client:
+    async with FrameIOClient(access_token) as client:
         result = await client.list_comments(
             account_id=account_id,
             file_id=file_id,

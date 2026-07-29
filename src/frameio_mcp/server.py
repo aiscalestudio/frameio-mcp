@@ -1,8 +1,18 @@
-"""FastMCP server exposing the 5 Frame.io tools to any MCP-compatible client."""
+"""MCP server exposing the five Frame.io tools.
+
+Auth model: every tool acts as the calling user. Claude authenticates the user against
+Adobe IMS through FastMCP's OIDCProxy, and `require_frameio_token()` pulls that user's
+Adobe access token out of the request context. The server stores no Frame.io
+credentials of its own and has no notion of a "default" user.
+
+Token lifecycle is handled upstream by OAuthProxy, including refresh under a lock, so
+nothing here writes a token to disk.
+"""
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_access_token
 
 from .tools.get_asset_from_url import get_asset_from_url as _get_asset_from_url
 from .tools.get_transcript_from_sibling import (
@@ -15,7 +25,22 @@ from .tools.upload_attachment import upload_attachment as _upload_attachment
 mcp = FastMCP("frameio")
 
 
-@mcp.tool()
+def require_frameio_token() -> str:
+    """Return the calling user's Adobe access token, or explain why there isn't one.
+
+    OAuthProxy resolves the FastMCP bearer token back to the upstream Adobe token, so
+    what comes out of `get_access_token().token` is the value Frame.io expects.
+    """
+    token = get_access_token()
+    if token is None or not token.token:
+        raise ValueError(
+            "No Frame.io credentials for this request. Reconnect the Frame.io "
+            "connector and sign in with your Adobe ID."
+        )
+    return token.token
+
+
+@mcp.tool
 async def frameio_get_asset_from_url(url: str) -> dict:
     """Resolve a Frame.io URL (project view, player, or review link) to identifiers.
 
@@ -28,12 +53,12 @@ async def frameio_get_asset_from_url(url: str) -> dict:
       https://next.frame.io/player/{file_id}
       https://app.frame.io/reviews/{review_id}/{file_id}
     """
-    return await _get_asset_from_url(url)
+    return await _get_asset_from_url(require_frameio_token(), url)
 
 
-@mcp.tool()
+@mcp.tool
 async def frameio_get_transcript_from_sibling(account_id: str, file_id: str) -> dict:
-    """Find the SRT or VTT transcript file that lives in the same folder as a video, and parse it.
+    """Find the SRT or VTT transcript file in the same folder as a video, and parse it.
 
     Frame.io hasn't shipped a native transcript API yet, so this tool relies on the editor
     having exported the transcript (Frame.io UI → three-dot menu on the video → Export
@@ -46,10 +71,12 @@ async def frameio_get_transcript_from_sibling(account_id: str, file_id: str) -> 
     If no sibling SRT/VTT is found, returns an actionable error telling you what the editor
     needs to do.
     """
-    return await _get_transcript_from_sibling(account_id, file_id)
+    return await _get_transcript_from_sibling(
+        require_frameio_token(), account_id, file_id
+    )
 
 
-@mcp.tool()
+@mcp.tool
 async def frameio_post_comment(
     account_id: str,
     file_id: str,
@@ -63,13 +90,22 @@ async def frameio_post_comment(
     - duration_seconds is optional; supply it for range comments (comment spans a segment)
     - text supports Markdown
 
-    Returns the new comment's id, text, resolved timestamp (in both microseconds and seconds),
-    created_at, and a Frame.io URL.
+    The comment is attributed to the signed-in user, not to a shared service account.
+
+    Returns the new comment's id, text, resolved timestamp (in both microseconds and
+    seconds), created_at, and a Frame.io URL.
     """
-    return await _post_comment(account_id, file_id, text, timestamp_seconds, duration_seconds)
+    return await _post_comment(
+        require_frameio_token(),
+        account_id,
+        file_id,
+        text,
+        timestamp_seconds,
+        duration_seconds,
+    )
 
 
-@mcp.tool()
+@mcp.tool
 async def frameio_list_comments(
     account_id: str,
     file_id: str,
@@ -81,16 +117,17 @@ async def frameio_list_comments(
 
     - page_size: 1 to 100, default 50
     - after: cursor from a previous call's next_cursor (for pagination)
-    - only_mine: filter to comments the authenticated user posted. Useful when Fable 5
-      needs to walk its own comment list back and act on each one.
+    - only_mine: filter to comments the authenticated user posted
 
     Returns comments (with timestamp_seconds already converted from microseconds),
     next_cursor for pagination, and total_count.
     """
-    return await _list_comments(account_id, file_id, page_size, after, only_mine)
+    return await _list_comments(
+        require_frameio_token(), account_id, file_id, page_size, after, only_mine
+    )
 
 
-@mcp.tool()
+@mcp.tool
 async def frameio_upload_attachment(
     account_id: str,
     comment_id: str,
@@ -98,10 +135,13 @@ async def frameio_upload_attachment(
 ) -> dict:
     """Attach a local file (MP4, PNG, PDF, etc.) to a specific Frame.io comment.
 
-    - file_path must be an absolute path on the machine running this MCP server
-    - Media type is inferred from the file extension
+    NOTE: `file_path` is a path on the machine running this server. That is meaningless
+    once the server is hosted, so this signature changes in Phase 2 to accept a URL or
+    a base64 payload instead.
 
     Returns the attachment_id, file_name, media_type, file_size_bytes, and Frame.io URL
     where the attached file becomes visible on the comment.
     """
-    return await _upload_attachment(account_id, comment_id, file_path)
+    return await _upload_attachment(
+        require_frameio_token(), account_id, comment_id, file_path
+    )

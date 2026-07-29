@@ -1,4 +1,16 @@
-"""Frame.io v4 REST API client with automatic auth + retry."""
+"""Frame.io v4 REST API client.
+
+Takes an access token per instance and does not manage its lifecycle. Refresh belongs
+to whoever owns the token:
+
+  - the hosted server gets an already-fresh Adobe token from FastMCP's OAuthProxy,
+    which refreshes upstream under a lock
+  - the local CLI calls `get_valid_tokens()`, which refreshes before handing it over
+
+Keeping refresh out of here is what lets the same client serve both. It also stops a
+401 from being silently rewritten as an authentication problem when the real cause is
+a missing Frame.io entitlement.
+"""
 
 from __future__ import annotations
 
@@ -8,8 +20,7 @@ from typing import Any
 
 import httpx
 
-from .auth import Tokens, get_valid_tokens, refresh_tokens, save_tokens
-from .config import FRAMEIO_API_BASE_URL, Config
+from .config import FRAMEIO_API_BASE_URL
 
 
 class FrameIOError(Exception):
@@ -21,52 +32,38 @@ class RateLimitError(FrameIOError):
 
 
 class FrameIOClient:
-    """Async client for Frame.io v4 REST API. Handles auth, 401 refresh, 429 backoff.
+    """Async client for the Frame.io v4 REST API. Handles 429 backoff.
 
     Usage:
-        config = Config.from_env()
-        async with FrameIOClient(config) as client:
+        async with FrameIOClient(access_token) as client:
             me = await client.get_me()
     """
 
     MAX_RETRIES = 4
 
-    def __init__(
-        self,
-        config: Config,
-        tokens: Tokens | None = None,
-        auto_refresh_on_401: bool = True,
-    ):
-        """
-        `auto_refresh_on_401` exists for diagnostics. Frame.io returns 401 both for an
-        expired token and for a token that was never authorized for v4, and the refresh
-        path turns the second case into a misleading "re-authenticate" error. Turning it
-        off lets a caller see the original 401 as-is.
-        """
-        self.config = config
-        self._tokens = tokens
-        self._auto_refresh_on_401 = auto_refresh_on_401
+    def __init__(self, access_token: str):
+        if not access_token:
+            raise ValueError(
+                "FrameIOClient requires a non-empty access token. The hosted server "
+                "reads it from get_access_token(); the CLI from get_valid_tokens()."
+            )
+        self._access_token = access_token
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> FrameIOClient:
-        if self._tokens is None:
-            self._tokens = await get_valid_tokens(self.config)
         self._client = httpx.AsyncClient(
             base_url=FRAMEIO_API_BASE_URL,
             timeout=60.0,
-            headers={"Accept": "application/json"},
+            headers={
+                "Accept": "application/json",
+                "Authorization": f"Bearer {self._access_token}",
+            },
         )
         return self
 
     async def __aexit__(self, *args) -> None:
         if self._client:
             await self._client.aclose()
-
-    async def _ensure_fresh_token(self) -> None:
-        """Refresh in-memory token if it's about to expire."""
-        if self._tokens and self._tokens.is_expired:
-            self._tokens = await refresh_tokens(self.config, self._tokens)
-            save_tokens(self._tokens, self.config.tokens_path)
 
     async def _request(
         self,
@@ -77,24 +74,16 @@ class FrameIOClient:
         json: dict | None = None,
         retry_count: int = 0,
     ) -> dict:
-        """Make an authenticated request. Handles 401 (refresh + retry) and 429 (backoff)."""
-        assert self._client is not None, "Not initialized: use `async with FrameIOClient(...)`"
-        assert self._tokens is not None, "No tokens available"
-
-        await self._ensure_fresh_token()
-
-        headers = {"Authorization": f"Bearer {self._tokens.access_token}"}
-        response = await self._client.request(
-            method, path, params=params, json=json, headers=headers
-        )
-
-        # 401 → force a fresh refresh and retry once
-        if response.status_code == 401 and retry_count == 0 and self._auto_refresh_on_401:
-            self._tokens = await refresh_tokens(self.config, self._tokens)
-            save_tokens(self._tokens, self.config.tokens_path)
-            return await self._request(
-                method, path, params=params, json=json, retry_count=retry_count + 1
+        """Make an authenticated request. Retries on 429 only."""
+        if self._client is None:
+            raise RuntimeError(
+                "FrameIOClient is not open. Use `async with FrameIOClient(token) as c:`"
             )
+
+        response = await self._client.request(method, path, params=params, json=json)
+
+        # A 401 is deliberately not retried. It means the token is bad, and only the
+        # caller can fix that. Retrying here previously masked entitlement failures.
 
         # 429 → exponential backoff, retry up to MAX_RETRIES
         if response.status_code == 429:

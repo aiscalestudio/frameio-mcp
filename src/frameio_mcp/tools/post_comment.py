@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from ..client import FrameIOClient
-from ..config import Config
 
 
 async def post_comment(
+    access_token: str,
     account_id: str,
     file_id: str,
     text: str,
@@ -19,8 +19,7 @@ async def post_comment(
     timestamp_us = int(round(timestamp_seconds * 1_000_000))
     duration_us = int(round(duration_seconds * 1_000_000)) if duration_seconds else None
 
-    config = Config.from_env()
-    async with FrameIOClient(config) as client:
+    async with FrameIOClient(access_token) as client:
         result = await client.create_comment(
             account_id=account_id,
             file_id=file_id,

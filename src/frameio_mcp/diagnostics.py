@@ -22,7 +22,7 @@ from typing import Any
 
 from .auth import Tokens
 from .client import FrameIOClient, FrameIOError
-from .config import REQUIRED_V4_SCOPES, Config
+from .config import REQUIRED_V4_SCOPES
 
 
 @dataclass
@@ -212,7 +212,6 @@ async def check_v4_write_comment(
 
 
 async def run_entitlement_checks(
-    config: Config,
     tokens: Tokens,
     account_id: str | None = None,
     file_id: str | None = None,
@@ -225,11 +224,10 @@ async def run_entitlement_checks(
     """
     results: list[CheckResult] = [check_granted_scopes(tokens)]
 
-    # auto_refresh_on_401 is off on purpose: a refresh attempt would rewrite an
-    # entitlement failure as an authentication failure and hide the real cause.
-    async with FrameIOClient(
-        config, tokens=tokens, auto_refresh_on_401=False
-    ) as client:
+    # The token is passed through as-is. The client no longer refreshes on 401, which
+    # is what lets an entitlement failure surface as itself rather than as a misleading
+    # "please re-authenticate".
+    async with FrameIOClient(tokens.access_token) as client:
         identity = await check_v4_identity(client)
         results.append(identity)
         if not identity.passed:

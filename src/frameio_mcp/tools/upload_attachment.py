@@ -6,7 +6,6 @@ import mimetypes
 from pathlib import Path
 
 from ..client import FrameIOClient
-from ..config import Config
 
 
 def _find_upload_url(attachment: dict) -> str | None:
@@ -23,6 +22,7 @@ def _find_upload_url(attachment: dict) -> str | None:
 
 
 async def upload_attachment(
+    access_token: str,
     account_id: str,
     comment_id: str,
     file_path: str,
@@ -41,8 +41,7 @@ async def upload_attachment(
     if not media_type:
         media_type = "application/octet-stream"
 
-    config = Config.from_env()
-    async with FrameIOClient(config) as client:
+    async with FrameIOClient(access_token) as client:
         attachment = await client.create_comment_attachment(
             account_id=account_id,
             comment_id=comment_id,

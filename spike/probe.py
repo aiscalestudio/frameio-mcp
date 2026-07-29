@@ -13,7 +13,6 @@ The persistence check is two-phase on purpose:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 
 import httpx

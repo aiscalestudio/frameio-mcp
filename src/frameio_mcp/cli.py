@@ -187,7 +187,7 @@ def verify(frameio_url: str | None, write: bool) -> None:
     click.echo(f"Checking Frame.io v4 access (scopes requested: {config.scopes})\n")
     results = asyncio.run(
         run_entitlement_checks(
-            config, tokens, file_id=file_id, write_probe_text=probe_text
+            tokens, file_id=file_id, write_probe_text=probe_text
         )
     )
 

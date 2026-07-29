@@ -7,11 +7,10 @@ import json
 import time
 
 import httpx
-import pytest
 import respx
 
 from frameio_mcp.auth import Tokens
-from frameio_mcp.config import FRAMEIO_API_BASE_URL, Config
+from frameio_mcp.config import FRAMEIO_API_BASE_URL
 from frameio_mcp.diagnostics import (
     check_granted_scopes,
     decode_token_scopes,
@@ -80,32 +79,22 @@ class TestCheckGrantedScopes:
         assert check_granted_scopes(tokens).passed
 
 
-@pytest.fixture
-def config(tmp_path):
-    return Config(
-        client_id="c",
-        client_secret="s",
-        oauth_relay_url="https://example.invalid/cb",
-        tokens_path=tmp_path / "tokens.json",
-    )
-
-
 class TestRunEntitlementChecks:
     @respx.mock
-    async def test_stops_at_identity_failure(self, config):
+    async def test_stops_at_identity_failure(self):
         """A 401 on /me makes every later check a duplicate of the same cause."""
         respx.get(f"{FRAMEIO_API_BASE_URL}/me").mock(
             return_value=httpx.Response(401, json={"errors": ["not authorized"]})
         )
 
-        results = await run_entitlement_checks(config, tokens_with(ALL_SCOPES))
+        results = await run_entitlement_checks(tokens_with(ALL_SCOPES))
 
         assert [r.name for r in results] == ["Granted scopes", "v4 identity (GET /me)"]
         assert not results[-1].passed
         assert "product profile" in results[-1].remedy
 
     @respx.mock
-    async def test_happy_path_through_accounts(self, config):
+    async def test_happy_path_through_accounts(self):
         respx.get(f"{FRAMEIO_API_BASE_URL}/me").mock(
             return_value=httpx.Response(200, json={"data": {"email": "dan@example.com"}})
         )
@@ -115,14 +104,14 @@ class TestRunEntitlementChecks:
             )
         )
 
-        results = await run_entitlement_checks(config, tokens_with(ALL_SCOPES))
+        results = await run_entitlement_checks(tokens_with(ALL_SCOPES))
 
         assert all(r.passed for r in results)
         assert "dan@example.com" in results[1].detail
         assert "AI Scale Studio" in results[2].detail
 
     @respx.mock
-    async def test_zero_accounts_is_a_failure(self, config):
+    async def test_zero_accounts_is_a_failure(self):
         respx.get(f"{FRAMEIO_API_BASE_URL}/me").mock(
             return_value=httpx.Response(200, json={"data": {"id": "u1"}})
         )
@@ -130,13 +119,13 @@ class TestRunEntitlementChecks:
             return_value=httpx.Response(200, json={"data": []})
         )
 
-        results = await run_entitlement_checks(config, tokens_with(ALL_SCOPES))
+        results = await run_entitlement_checks(tokens_with(ALL_SCOPES))
 
         assert not results[-1].passed
         assert "no Frame.io accounts" in results[-1].remedy
 
     @respx.mock
-    async def test_write_probe_runs_only_when_text_supplied(self, config):
+    async def test_write_probe_runs_only_when_text_supplied(self):
         respx.get(f"{FRAMEIO_API_BASE_URL}/me").mock(
             return_value=httpx.Response(200, json={"data": {"id": "u1"}})
         )
@@ -148,13 +137,13 @@ class TestRunEntitlementChecks:
         ).mock(return_value=httpx.Response(200, json={"data": []}))
 
         results = await run_entitlement_checks(
-            config, tokens_with(ALL_SCOPES), file_id="file-1"
+            tokens_with(ALL_SCOPES), file_id="file-1"
         )
 
         assert [r.name for r in results][-1] == "v4 read (list comments)"
 
     @respx.mock
-    async def test_write_probe_reports_created_comment(self, config):
+    async def test_write_probe_reports_created_comment(self):
         respx.get(f"{FRAMEIO_API_BASE_URL}/me").mock(
             return_value=httpx.Response(200, json={"data": {"id": "u1"}})
         )
@@ -169,7 +158,6 @@ class TestRunEntitlementChecks:
         ).mock(return_value=httpx.Response(200, json={"data": {"id": "cmt-9"}}))
 
         results = await run_entitlement_checks(
-            config,
             tokens_with(ALL_SCOPES),
             file_id="file-1",
             write_probe_text="probe",
@@ -179,7 +167,7 @@ class TestRunEntitlementChecks:
         assert results[-1].data["comment_id"] == "cmt-9"
 
     @respx.mock
-    async def test_write_failure_distinguishes_role_problem_from_oauth(self, config):
+    async def test_write_failure_distinguishes_role_problem_from_oauth(self):
         respx.get(f"{FRAMEIO_API_BASE_URL}/me").mock(
             return_value=httpx.Response(200, json={"data": {"id": "u1"}})
         )
@@ -194,7 +182,6 @@ class TestRunEntitlementChecks:
         ).mock(return_value=httpx.Response(403, json={"errors": ["forbidden"]}))
 
         results = await run_entitlement_checks(
-            config,
             tokens_with(ALL_SCOPES),
             file_id="file-1",
             write_probe_text="probe",
