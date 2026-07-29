@@ -8,7 +8,6 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import httpx
 
@@ -29,7 +28,7 @@ class Tokens:
     access_token: str
     refresh_token: str
     expires_at: float  # Unix timestamp
-    account_id: Optional[str] = None
+    account_id: str | None = None
     token_type: str = "Bearer"
 
     @property
@@ -153,7 +152,7 @@ def save_tokens(tokens: Tokens, path: Path) -> None:
     tmp_path.replace(path)
 
 
-def load_tokens(path: Path) -> Optional[Tokens]:
+def load_tokens(path: Path) -> Tokens | None:
     """Read tokens from disk. Returns None if no tokens file exists."""
     if not path.exists():
         return None
@@ -161,7 +160,7 @@ def load_tokens(path: Path) -> Optional[Tokens]:
         data = json.loads(path.read_text())
         return Tokens.from_dict(data)
     except (json.JSONDecodeError, KeyError) as e:
-        raise AuthError(f"Corrupted tokens file at {path}: {e}")
+        raise AuthError(f"Corrupted tokens file at {path}: {e}") from e
 
 
 async def get_valid_tokens(config: Config) -> Tokens:
