@@ -131,17 +131,28 @@ async def frameio_list_comments(
 async def frameio_upload_attachment(
     account_id: str,
     comment_id: str,
-    file_path: str,
+    file_name: str,
+    source_url: str | None = None,
+    content_base64: str | None = None,
 ) -> dict:
-    """Attach a local file (MP4, PNG, PDF, etc.) to a specific Frame.io comment.
+    """Attach a file (MP4, PNG, PDF, etc.) to a specific Frame.io comment.
 
-    NOTE: `file_path` is a path on the machine running this server. That is meaningless
-    once the server is hosted, so this signature changes in Phase 2 to accept a URL or
-    a base64 payload instead.
+    Supply exactly one source:
+    - source_url: a publicly reachable http(s) URL the server fetches. Private,
+      loopback, and link-local addresses are refused.
+    - content_base64: the file contents inline, base64-encoded.
+
+    file_name determines the media type and the name shown in Frame.io.
+    Maximum size is 25 MB.
 
     Returns the attachment_id, file_name, media_type, file_size_bytes, and Frame.io URL
     where the attached file becomes visible on the comment.
     """
     return await _upload_attachment(
-        require_frameio_token(), account_id, comment_id, file_path
+        require_frameio_token(),
+        account_id,
+        comment_id,
+        file_name,
+        source_url,
+        content_base64,
     )

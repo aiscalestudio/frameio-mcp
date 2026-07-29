@@ -212,10 +212,46 @@ def verify(frameio_url: str | None, write: bool) -> None:
 
 
 @cli.command()
-def serve() -> None:
-    """Run the MCP server over stdio (for use with Claude Desktop, Code, Cowork)."""
-    from .server import mcp
-    mcp.run()
+@click.option(
+    "--http",
+    "use_http",
+    is_flag=True,
+    default=False,
+    help="Serve over authenticated HTTP instead of stdio. Requires the hosted env vars.",
+)
+@click.option("--host", default="127.0.0.1", help="Bind address for --http.")
+@click.option("--port", default=8000, type=int, help="Port for --http.")
+def serve(use_http: bool, host: str, port: int) -> None:
+    """Run the MCP server.
+
+    Default is stdio, which suits Claude Desktop and Claude Code and uses the token
+    from `frameio-mcp login`. Note that stdio cannot be used with Claude Cowork, whose
+    connectors are brokered from Anthropic's cloud and cannot reach this machine.
+
+    `--http` runs the same server Cowork talks to, with Adobe OAuth in front of it.
+    """
+    if not use_http:
+        from .server import mcp
+
+        mcp.run()
+        return
+
+    import uvicorn
+
+    from .app import create_app
+    from .server_config import ServerConfig
+
+    try:
+        config = ServerConfig.from_env()
+    except OSError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    click.echo(f"Serving MCP at {config.base_url}/mcp")
+    click.echo(f"OAuth callback: {config.redirect_uri}")
+    click.echo("This callback URI must be registered in the Adobe Developer Console.\n")
+
+    uvicorn.run(create_app(config), host=host, port=port)
 
 
 def main() -> None:
