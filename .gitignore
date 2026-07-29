@@ -37,7 +37,11 @@ htmlcov/
 .hypothesis/
 
 # IDEs
-.vscode/
+# Shared project setup is committed so a fresh clone works; personal state is not.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
 .idea/
 *.swp
 *.swo
@@ -49,3 +53,6 @@ Thumbs.db
 # Local tokens (never commit)
 tokens.json
 tokens-*.json
+
+# Spike scratch storage
+.spike-storage/

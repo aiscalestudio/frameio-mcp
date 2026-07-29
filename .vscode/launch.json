@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "frameio-mcp: verify (account level)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "frameio_mcp",
+      "args": ["verify"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "frameio-mcp: verify (file, read only)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "frameio_mcp",
+      "args": ["verify", "--url", "${input:frameioUrl}"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "frameio-mcp: serve (stdio)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "frameio_mcp",
+      "args": ["serve"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ],
+  "inputs": [
+    {
+      "id": "frameioUrl",
+      "type": "promptString",
+      "description": "Frame.io file URL"
+    }
+  ]
+}
