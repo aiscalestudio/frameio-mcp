@@ -35,16 +35,15 @@ dependencies = [
     "python-dotenv>=1.0",
     "srt>=3.5",
     "webvtt-py>=0.5",
-]
-
-[project.optional-dependencies]
-# Extras the hosted deployment needs. Local stdio use does not require these:
-# OAuth client registrations must outlive any single process, which only matters
-# once the server runs behind Claude's OAuth flow on ephemeral infrastructure.
-server = [
+    # Redis-backed encrypted OAuth storage. These live in the main dependency list
+    # rather than an extra because Vercel installs from pyproject.toml and ignores
+    # requirements.txt, so it never sees extras. An extra here would build fine and
+    # then crash at runtime on a missing import, which is the worst failure shape.
     "py-key-value-aio[redis]>=0.4",
     "cryptography>=42.0",
 ]
+
+[project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
