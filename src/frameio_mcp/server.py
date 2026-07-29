@@ -47,8 +47,9 @@ async def frameio_get_asset_from_url(url: str) -> dict:
     """Resolve a Frame.io URL (project view, player, or review link) to identifiers.
 
     Returns account_id, workspace_id, project_id, file_id, file_name, media_type,
-    and duration_seconds. Call this first whenever the user provides a Frame.io URL
-    — every other tool needs account_id + file_id.
+    duration_seconds, and frame_rate. Call this first whenever the user provides a
+    Frame.io URL — every other tool needs account_id + file_id, and duration_seconds is
+    the only reliable way to know whether a requested timestamp exists in the video.
 
     Supports these URL patterns:
       https://next.frame.io/project/{project_id}/view/{file_id}
@@ -88,14 +89,23 @@ async def frameio_post_comment(
 ) -> dict:
     """Post a frame-accurate timestamped comment on a Frame.io file.
 
-    - timestamp_seconds is a float — fractional values allowed for sub-frame accuracy
-    - duration_seconds is optional; supply it for range comments (comment spans a segment)
+    `timestamp_seconds` is a position in ordinary playback seconds, exactly as a person
+    would read it off the player. 90.0 means one minute thirty. Do NOT scale, convert, or
+    compensate for units: this tool reads the file's frame rate and does the conversion
+    itself. Passing a fraction of a second to "compensate" puts the comment at the very
+    start of the video.
+
+    Call frameio_get_asset_from_url first if you do not already know the video's length.
+    It reports duration_seconds, so you can tell whether the position you want exists.
+    Do not infer the duration from other comments' timestamps.
+
+    - duration_seconds is optional; supply it for a range comment spanning a segment
     - text supports Markdown
+    - the comment is attributed to the signed-in user, not a shared service account
 
-    The comment is attributed to the signed-in user, not to a shared service account.
-
-    Returns the new comment's id, text, resolved timestamp (in both microseconds and
-    seconds), created_at, and a Frame.io URL.
+    Returns the comment's id, text, the frame it landed on, the equivalent in seconds,
+    the file's frame_rate, created_at, and a Frame.io URL. If the requested position is
+    past the end of the video, the error names the actual duration.
     """
     return await _post_comment(
         require_frameio_token(),
