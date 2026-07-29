@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from mcp.server.fastmcp import FastMCP
 
 from .tools.get_asset_from_url import get_asset_from_url as _get_asset_from_url
@@ -13,7 +11,6 @@ from .tools.get_transcript_from_sibling import (
 from .tools.list_comments import list_comments as _list_comments
 from .tools.post_comment import post_comment as _post_comment
 from .tools.upload_attachment import upload_attachment as _upload_attachment
-
 
 mcp = FastMCP("frameio")
 
@@ -58,7 +55,7 @@ async def frameio_post_comment(
     file_id: str,
     text: str,
     timestamp_seconds: float,
-    duration_seconds: Optional[float] = None,
+    duration_seconds: float | None = None,
 ) -> dict:
     """Post a frame-accurate timestamped comment on a Frame.io file.
 
@@ -77,7 +74,7 @@ async def frameio_list_comments(
     account_id: str,
     file_id: str,
     page_size: int = 50,
-    after: Optional[str] = None,
+    after: str | None = None,
     only_mine: bool = False,
 ) -> dict:
     """List comments on a Frame.io file. Cursor-paginated.

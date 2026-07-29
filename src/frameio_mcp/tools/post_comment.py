@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ..client import FrameIOClient
 from ..config import Config
 
@@ -13,7 +11,7 @@ async def post_comment(
     file_id: str,
     text: str,
     timestamp_seconds: float,
-    duration_seconds: Optional[float] = None,
+    duration_seconds: float | None = None,
 ) -> dict:
     """Create a Frame.io comment. Converts fractional seconds to microseconds for the API."""
     if timestamp_seconds < 0:

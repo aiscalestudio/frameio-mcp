@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ..client import FrameIOClient
 from ..config import Config
 
@@ -28,7 +26,7 @@ async def list_comments(
     account_id: str,
     file_id: str,
     page_size: int = 50,
-    after: Optional[str] = None,
+    after: str | None = None,
     only_mine: bool = False,
 ) -> dict:
     """List comments on a file. Cursor-paginated. Optionally filter to current user."""

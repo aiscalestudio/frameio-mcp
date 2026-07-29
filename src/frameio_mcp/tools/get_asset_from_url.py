@@ -26,11 +26,7 @@ def parse_frameio_url(url: str) -> dict:
         nxt2 = parts[i + 2] if i + 2 < len(parts) else None
         if part == "project" and nxt:
             result["project_id"] = nxt
-        elif part == "view" and nxt:
-            result["file_id"] = nxt
-        elif part == "player" and nxt:
-            result["file_id"] = nxt
-        elif part == "assets" and nxt:
+        elif part == "view" and nxt or part == "player" and nxt or part == "assets" and nxt:
             result["file_id"] = nxt
         elif part == "reviews" and nxt and nxt2:
             result["review_id"] = nxt

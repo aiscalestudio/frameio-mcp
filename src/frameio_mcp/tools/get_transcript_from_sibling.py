@@ -12,7 +12,6 @@ import webvtt
 from ..client import FrameIOClient
 from ..config import Config
 
-
 # Speaker labels in Frame.io Speaker ID exports look like "[Speaker 1]: text"
 _SPEAKER_RE = re.compile(r"^\s*\[([^\]]+)\]:\s*(.*)$", re.DOTALL)
 
@@ -160,10 +159,7 @@ async def get_transcript_from_sibling(account_id: str, file_id: str) -> dict:
 
     # 6. Parse based on extension
     name = (transcript_file.get("name") or "").lower()
-    if name.endswith(".srt"):
-        transcript = _parse_srt(content)
-    else:
-        transcript = _parse_vtt(content)
+    transcript = _parse_srt(content) if name.endswith(".srt") else _parse_vtt(content)
 
     return {
         "transcript": transcript,
