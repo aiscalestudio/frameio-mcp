@@ -11,8 +11,12 @@ nothing here writes a token to disk.
 
 from __future__ import annotations
 
+import base64
+import json
+
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
+from fastmcp.utilities.logging import get_logger
 
 from .tools.get_asset_from_url import get_asset_from_url as _get_asset_from_url
 from .tools.get_transcript_from_sibling import (
@@ -22,21 +26,45 @@ from .tools.list_comments import list_comments as _list_comments
 from .tools.post_comment import post_comment as _post_comment
 from .tools.upload_attachment import upload_attachment as _upload_attachment
 
+logger = get_logger(__name__)
+
 mcp = FastMCP("frameio")
 
 
-def require_frameio_token() -> str:
-    """Return the calling user's Adobe access token, or explain why there isn't one.
+def _describe_token(raw: str) -> str:
+    """Identify which token we are about to send, without logging the token itself.
 
-    OAuthProxy resolves the FastMCP bearer token back to the upstream Adobe token, so
-    what comes out of `get_access_token().token` is the value Frame.io expects.
+    Adobe access tokens carry `type: "access_token"`; FastMCP's own tokens do not. This
+    exists because Frame.io answered 401 "Invalid or missing authorization token" while
+    Adobe's introspection called the same request's token valid, and telling those two
+    apart is the whole diagnosis.
     """
+    parts = raw.split(".")
+    if len(parts) != 3:
+        return "opaque (not a JWT)"
+    payload = parts[1] + "=" * (-len(parts[1]) % 4)
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+    except Exception:
+        return "undecodable payload"
+    return (
+        f"type={claims.get('type')} "
+        f"iss={claims.get('iss')} "
+        f"client_id={claims.get('client_id')} "
+        f"has_jti={'jti' in claims}"
+    )
+
+
+def require_frameio_token() -> str:
+    """Return the calling user's Adobe access token, or explain why there isn't one."""
     token = get_access_token()
     if token is None or not token.token:
         raise ValueError(
             "No Frame.io credentials for this request. Reconnect the Frame.io "
             "connector and sign in with your Adobe ID."
         )
+
+    logger.warning("Forwarding token to Frame.io: %s", _describe_token(token.token))
     return token.token
 
 
