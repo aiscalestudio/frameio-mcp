@@ -28,13 +28,17 @@ from __future__ import annotations
 import base64
 import binascii
 import json
-import logging
 from typing import Any
 
 import httpx
 from fastmcp.server.auth.auth import AccessToken, TokenVerifier
+from fastmcp.utilities.logging import get_logger
 
-logger = logging.getLogger(__name__)
+# FastMCP's logger, not logging.getLogger(__name__). A bare module logger is not
+# configured in the serverless runtime, so this verifier's decisions were invisible in
+# production: Adobe answers HTTP 200 even for `{"valid": false}`, so the access log
+# showed only successful round trips while every request was being denied.
+logger = get_logger(__name__)
 
 ADOBE_IMS_VALIDATE_URL = "https://ims-na1.adobelogin.com/ims/validate_token/v1"
 
@@ -116,6 +120,11 @@ class AdobeIMSTokenVerifier(TokenVerifier):
                 )
                 return None
 
+        logger.debug(
+            "Adobe accepted the token for %s with scopes %s",
+            details.get("user_id", "unknown user"),
+            ",".join(scopes),
+        )
         return AccessToken(
             token=token,
             client_id=str(details.get("client_id") or self.client_id),
