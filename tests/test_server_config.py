@@ -91,6 +91,7 @@ class TestDerivedValues:
         """These are the scopes proven to work against live Frame.io v4."""
         assert set(ServerConfig.from_env().required_scopes) == {
             "openid",
+            "AdobeID",
             "email",
             "profile",
             "offline_access",

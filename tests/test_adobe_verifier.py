@@ -22,7 +22,7 @@ from frameio_mcp.adobe_verifier import (
 )
 
 CLIENT_ID = "12cc3b73f23948f4b4d69cdef0b96602"
-ALL_SCOPES = "openid,email,profile,offline_access,additional_info.roles"
+ALL_SCOPES = "openid,AdobeID,email,profile,offline_access,additional_info.roles"
 
 
 def adobe_token(scope: str = ALL_SCOPES, created_at: int | None = None) -> str:

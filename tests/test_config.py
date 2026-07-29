@@ -22,6 +22,20 @@ def test_default_scopes_include_everything_frameio_v4_needs():
     )
 
 
+def test_adobeid_scope_is_requested_explicitly():
+    """Adobe adds `AdobeID` at /authorize but not at the token exchange.
+
+    A browser-driven flow therefore appears to work without requesting it, while any
+    flow that re-sends the scope list during the code-to-token exchange (FastMCP's
+    OAuthProxy does) receives a token narrowed to exactly what was asked for. The
+    resulting token is identical to a working one except for this scope, and Frame.io
+    answers 401 "Invalid or missing authorization token" with nothing pointing at the
+    cause. Cost several hours to find.
+    """
+    assert "AdobeID" in REQUIRED_V4_SCOPES
+    assert "AdobeID" in DEFAULT_SCOPES.split(",")
+
+
 def test_default_scopes_have_no_stray_whitespace():
     """Adobe IMS takes a comma-separated list; stray spaces break the authorize URL."""
     assert " " not in DEFAULT_SCOPES

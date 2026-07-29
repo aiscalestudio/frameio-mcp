@@ -23,19 +23,34 @@ ADOBE_IMS_DISCOVERY_URL = (
 # Frame.io v4 API
 FRAMEIO_API_BASE_URL = "https://api.frame.io/v4"
 
-# Scopes Frame.io v4 authorization depends on.
+# Scopes Frame.io v4 authorization depends on. Every one of these is load-bearing, and
+# omitting any of them produces the same unhelpful symptom: a valid-looking token that
+# Frame.io v4 rejects with a blanket 401 and no indication which scope is missing.
 #
-# `additional_info.roles` is the one that bites: without it IMS still issues a
-# perfectly valid token, v2 endpoints keep working, and every v4 endpoint returns a
-# blanket 401 with no hint that a scope is missing. `email` and `profile` are needed
-# alongside it for v4 to resolve the user. `offline_access` is what earns a refresh
+# `additional_info.roles` carries the role claims v4 authorizes against. Without it, v2
+# endpoints keep working while every v4 endpoint 401s.
+#
+# `AdobeID` must be requested explicitly. Adobe appends it automatically at the
+# /authorize step, so a browser-driven flow appears to work without asking for it, but
+# the code-to-token exchange re-sends the requested scope list and narrows the issued
+# token to exactly that. Leaving it out yields a token identical to a working one except
+# for this scope, and Frame.io answers "Invalid or missing authorization token".
+#
+# `email` and `profile` let v4 resolve the user. `offline_access` earns the refresh
 # token, without which users re-authenticate daily.
 REQUIRED_V4_SCOPES = frozenset(
-    {"openid", "email", "profile", "offline_access", "additional_info.roles"}
+    {
+        "openid",
+        "AdobeID",
+        "email",
+        "profile",
+        "offline_access",
+        "additional_info.roles",
+    }
 )
 
 # Adobe IMS expects a comma-separated list with no spaces.
-DEFAULT_SCOPES = "openid,email,profile,offline_access,additional_info.roles"
+DEFAULT_SCOPES = "openid,AdobeID,email,profile,offline_access,additional_info.roles"
 
 
 def resolve_tokens_path() -> Path:

@@ -34,7 +34,7 @@ def tokens_with(scope: str | list[str]) -> Tokens:
     )
 
 
-ALL_SCOPES = "openid,email,profile,offline_access,additional_info.roles"
+ALL_SCOPES = "openid,AdobeID,email,profile,offline_access,additional_info.roles"
 
 
 class TestDecodeTokenScopes:
