@@ -19,14 +19,26 @@ you are ready.
 
 ---
 
-## Step 1: Open the connector settings
+## Step 1: Sign in to claude.ai in your browser first
+
+Do this before anything else. It is easy to miss and it is the most common reason setup
+fails.
+
+When you connect, Claude opens your **web browser** to complete the sign-in. If that
+browser is not already signed in to the same Claude account as the app, you land on the
+Claude login page and nothing else happens.
+
+So: open [claude.ai](https://claude.ai) in the browser you normally use, and check you are
+signed in.
+
+## Step 2: Open the connector settings
 
 1. Open Claude
 2. Click your name or the settings icon at the bottom left
 3. Go to **Settings**
 4. In the left sidebar, click **Connectors**
 
-## Step 2: Add the connector
+## Step 3: Add the connector
 
 1. Click **Add** in the top right, then **Add custom connector**
 2. Fill in exactly these two fields:
@@ -41,7 +53,7 @@ you are ready.
    connection.
 4. Click **Add**
 
-## Step 3: Sign in with Adobe
+## Step 4: Sign in with Adobe
 
 1. Frame.io now appears in your connector list. Click **Connect**
 2. A page appears titled **"Application Access Request"**. This is the Frame.io
@@ -54,7 +66,7 @@ That's it. You're done.
 
 ---
 
-## Step 4: Check that it works
+## Step 5: Check that it works
 
 Start a new conversation in Cowork and paste something like this, using a real URL from
 your own Frame.io account:
@@ -77,6 +89,14 @@ If Claude comes back with the correct file name, everything is working.
 | Read existing feedback | "Summarise all the comments on this video" |
 | Review your own notes | "List the comments I posted on this video" |
 | Attach a reference | "Post a comment at 1:32 and attach this image: [URL]" |
+
+### Say times the normal way
+
+"Post a comment at 2:30" or "at 90 seconds" both work. Claude reads the video's frame rate
+and works out the exact frame itself, so you never need to convert anything.
+
+If you ask for a time past the end of the video, it will tell you the real length rather
+than guessing.
 
 ### One thing to know about transcripts
 
@@ -110,10 +130,12 @@ Almost always one of these:
 Disconnecting and reconnecting will not fix this. It needs the right account or the right
 permission.
 
-### The connector says it needs reconnecting
+### The connector says it needs reconnecting, or a tool says your token expired
 
-Click **Connect** and sign in again. This is normal occasionally, for example if you
-haven't used it in a long time.
+Click **Disconnect**, then **Connect**, and sign in again.
+
+Disconnecting first matters. Simply reconnecting can reuse the old sign-in, and if that is
+the problem you will see the same error again.
 
 ### "No transcript file found"
 
@@ -123,6 +145,11 @@ The SRT hasn't been uploaded next to the video yet. See the transcript note abov
 
 You have view access to that project but not comment access. Ask the project owner to
 give you commenting permission in Frame.io.
+
+### Something worked before and now behaves oddly
+
+Start a new conversation. If Claude has already seen an error in a chat, it sometimes keeps
+reasoning from it even after the underlying problem is gone.
 
 ### Attaching a file fails
 
