@@ -14,6 +14,7 @@ import pytest
 from key_value.aio.stores.memory import MemoryStore
 from starlette.testclient import TestClient
 
+from frameio_mcp.adobe_verifier import AdobeIMSTokenVerifier
 from frameio_mcp.app import build_auth, create_app
 from frameio_mcp.server_config import ServerConfig
 
@@ -48,33 +49,22 @@ class TestAuthWiring:
         auth = build_auth(config, client_storage=MemoryStore())
         assert "adobelogin.com" in str(auth.oidc_config.token_endpoint)
 
-    def test_requests_the_verified_v4_scopes(self, config):
-        """Dropping additional_info.roles here reintroduces the blanket v4 401."""
-        auth = build_auth(config, client_storage=MemoryStore())
-        assert "additional_info.roles" in auth.required_scopes
+    def test_does_not_verify_adobe_tokens_as_jwts(self, config):
+        """Adobe IMS tokens are JWT-shaped but cannot be verified as JWTs.
 
-    def test_verifies_the_id_token_not_the_access_token(self, config):
-        """Adobe's access token cannot be verified as a JWT.
-
-        It is signed with `kid: ims_na1-key-at-1`, which the JWKS at /ims/keys does not
-        publish, and it has no iss, aud, or exp claims. Verifying it makes the server
-        reject the credentials it just issued, which surfaces to the user as
+        Every header carries `x5u: "ims_na1-key-at-1.cer"`, a bare filename where
+        RFC 7515 requires a URI, so a conforming library raises
+        `InvalidHeaderValueError` before checking the signature. Both the access token
+        and the id_token carry it. Reverting to a JWTVerifier here brings back
         "your account was authorized, but the integration rejected the credentials".
-
-        The id_token is a conforming OIDC JWT signed with the published `ims` key.
         """
         auth = build_auth(config, client_storage=MemoryStore())
-        assert auth._verify_id_token is True
+        assert isinstance(auth._token_validator, AdobeIMSTokenVerifier)
 
-    def test_tools_still_receive_the_access_token(self, config):
-        """Verifying the id_token must not change which token reaches Frame.io.
-
-        FastMCP patches AccessToken.token back to the upstream access token when an
-        alternate token is verified. If that ever stopped happening, every tool would
-        send an id_token to Frame.io and get a 401.
-        """
+    def test_enforces_the_verified_v4_scopes(self, config):
+        """Dropping additional_info.roles reintroduces the blanket Frame.io v4 401."""
         auth = build_auth(config, client_storage=MemoryStore())
-        assert auth._uses_alternate_verification() is True
+        assert "additional_info.roles" in auth._token_validator.required_scopes
 
 
 class TestOAuthMetadata:
@@ -91,6 +81,17 @@ class TestOAuthMetadata:
     def test_publishes_protected_resource_metadata(self, client):
         body = client.get("/.well-known/oauth-protected-resource/mcp").json()
         assert body["authorization_servers"]
+
+    def test_still_advertises_the_v4_scopes(self, client):
+        """required_scopes moved from OIDCProxy onto the custom verifier.
+
+        The two cannot be set together, so the advertised scopes are now inherited from
+        the verifier. If that inheritance broke, Adobe would be asked for fewer scopes
+        than Frame.io v4 needs and every v4 call would 401 with nothing pointing at the
+        cause.
+        """
+        body = client.get("/.well-known/oauth-authorization-server").json()
+        assert "additional_info.roles" in body["scopes_supported"]
 
 
 class TestAccessControl:

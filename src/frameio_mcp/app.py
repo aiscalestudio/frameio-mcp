@@ -21,6 +21,7 @@ from typing import Any
 
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
 
+from .adobe_verifier import AdobeIMSTokenVerifier
 from .config import ADOBE_IMS_DISCOVERY_URL
 from .server import mcp
 from .server_config import OAUTH_CALLBACK_PATH, ServerConfig
@@ -59,20 +60,19 @@ def build_auth(config: ServerConfig, client_storage: Any | None = None) -> OIDCP
         client_secret=config.client_secret,
         base_url=config.base_url,
         redirect_path=OAUTH_CALLBACK_PATH,
-        required_scopes=config.required_scopes,
         jwt_signing_key=config.jwt_signing_key,
         client_storage=client_storage or build_client_storage(config),
-        # Adobe's access token is JWT-shaped but not verifiable: it is signed with
-        # `kid: ims_na1-key-at-1`, which is absent from the JWKS at /ims/keys, and it
-        # carries no iss, aud, or exp claims (it uses created_at/expires_in as
-        # millisecond strings instead). Verifying it fails, so the server rejected the
-        # very credentials it had just issued.
-        #
-        # The id_token is a conforming OIDC JWT signed with the published `ims` key, so
-        # verify that instead. FastMCP then patches the resulting AccessToken.token back
-        # to the upstream *access* token, which is what Frame.io requires, so the tools
-        # are unaffected.
-        verify_id_token=True,
+        # Adobe IMS tokens cannot be verified as JWTs. Every token header carries
+        # `x5u: "ims_na1-key-at-1.cer"`, a bare filename where RFC 7515 requires a URI,
+        # so a conforming library rejects the token on header validation before checking
+        # the signature. Both the access token and the id_token carry it. The symptom is
+        # a server that authenticates a user and then rejects the credentials it just
+        # issued. See adobe_verifier.py for the full account.
+        token_verifier=AdobeIMSTokenVerifier(
+            client_id=config.client_id,
+            required_scopes=config.required_scopes,
+            base_url=config.base_url,
+        ),
     )
 
 
