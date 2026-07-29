@@ -150,17 +150,39 @@ async def _resolve_content(
     return payload
 
 
-def _find_upload_url(attachment: dict) -> str | None:
-    """Locate the presigned upload URL in the attachment creation response."""
-    for key in ("upload_url", "upload"):
-        v = attachment.get(key)
-        if isinstance(v, str) and v:
-            return v
-        if isinstance(v, dict):
-            nested = v.get("url") or v.get("upload_url")
-            if isinstance(nested, str) and nested:
-                return nested
-    return None
+def find_upload_url(attachment: dict) -> str:
+    """Extract the single presigned upload URL from the attachment response.
+
+    The v4 OpenAPI spec returns `upload_urls`, an array of strings, and notes that "the
+    number of URLs returned will vary depending on the file size" — Frame.io hands back
+    several for a multipart upload of a large file.
+
+    An earlier version of this looked for a singular `upload_url` string, a field that
+    does not exist, so every attachment upload failed with "Frame.io did not return an
+    upload URL".
+
+    Multiple URLs means multipart, which is not implemented. That case raises rather than
+    PUTting the whole payload to the first URL, which would produce a corrupt attachment
+    that looks like a success.
+    """
+    urls = attachment.get("upload_urls")
+    if not isinstance(urls, list) or not urls:
+        raise AttachmentSourceError(
+            f"Frame.io returned no upload URLs for attachment "
+            f"{attachment.get('id', '(no id)')}. Response keys: {sorted(attachment)}"
+        )
+
+    if len(urls) > 1:
+        raise AttachmentSourceError(
+            f"Frame.io split this attachment into {len(urls)} upload parts, which "
+            f"multipart upload would be needed for and is not implemented. Use a "
+            f"smaller file."
+        )
+
+    url = urls[0]
+    if not isinstance(url, str) or not url:
+        raise AttachmentSourceError(f"Frame.io returned an unusable upload URL: {url!r}")
+    return url
 
 
 async def upload_attachment(
@@ -184,14 +206,7 @@ async def upload_attachment(
             media_type=media_type,
             file_size=file_size,
         )
-        upload_url = _find_upload_url(attachment)
-        if not upload_url:
-            raise ValueError(
-                f"Frame.io did not return an upload URL. Response: {attachment}. "
-                f"The attachment endpoint may have a different response shape — "
-                f"check the Frame.io v4 OpenAPI spec at "
-                f"https://api.frame.io/v4/openapi.json"
-            )
+        upload_url = find_upload_url(attachment)
         await FrameIOClient.upload_to_presigned_url(upload_url, file_bytes, media_type)
 
     return {

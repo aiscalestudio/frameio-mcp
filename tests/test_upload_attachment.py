@@ -21,6 +21,7 @@ from frameio_mcp.config import FRAMEIO_API_BASE_URL
 from frameio_mcp.tools.upload_attachment import (
     MAX_ATTACHMENT_BYTES,
     AttachmentSourceError,
+    find_upload_url,
     resolve_media_type,
     upload_attachment,
 )
@@ -51,7 +52,7 @@ def mock_frameio_accepts_attachment():
             json={
                 "data": {
                     "id": "att-1",
-                    "upload_url": PRESIGNED,
+                    "upload_urls": [PRESIGNED],
                     "url": "https://next.frame.io/attachments/att-1",
                 }
             },
@@ -201,7 +202,7 @@ class TestSuccessfulUpload:
         """Frame.io reserves the upload against this number; a mismatch fails the PUT."""
         create_route = respx.post(ATTACHMENT_URL).mock(
             return_value=httpx.Response(
-                201, json={"data": {"id": "att-1", "upload_url": PRESIGNED}}
+                201, json={"data": {"id": "att-1", "upload_urls": [PRESIGNED]}}
             )
         )
         respx.put(PRESIGNED).mock(return_value=httpx.Response(200))
@@ -221,15 +222,72 @@ class TestSuccessfulUpload:
         assert body["data"]["file_size"] == len(payload)
 
 
-class TestFrameioResponseHandling:
+class TestUploadUrlExtraction:
+    """The v4 spec returns `upload_urls` (an array), not `upload_url` (a string).
+
+    Reading the wrong field made every attachment upload fail. Confirmed against
+    https://api.frame.io/v4/openapi.json.
+    """
+
+    def test_reads_the_single_url_from_the_array(self):
+        assert find_upload_url({"upload_urls": [PRESIGNED]}) == PRESIGNED
+
+    def test_missing_field_is_reported_with_the_keys_present(self):
+        with pytest.raises(AttachmentSourceError, match="no upload URLs"):
+            find_upload_url({"id": "att-1", "name": "a.png"})
+
+    def test_empty_array_is_reported(self):
+        with pytest.raises(AttachmentSourceError, match="no upload URLs"):
+            find_upload_url({"id": "att-1", "upload_urls": []})
+
+    def test_multipart_raises_rather_than_uploading_to_one_part(self):
+        """Frame.io returns several URLs for a large file.
+
+        PUTting the whole payload to the first would produce a corrupt attachment that
+        reports success, which is worse than refusing.
+        """
+        with pytest.raises(AttachmentSourceError, match="upload parts"):
+            find_upload_url({"upload_urls": [PRESIGNED, PRESIGNED + "-2"]})
+
     @respx.mock
-    async def test_missing_upload_url_is_reported_actionably(self):
-        """The v4 attachment response shape was never confirmed against the live API."""
+    async def test_upload_fails_clearly_when_frameio_returns_no_url(self):
         respx.post(ATTACHMENT_URL).mock(
             return_value=httpx.Response(201, json={"data": {"id": "att-1"}})
         )
 
-        with pytest.raises(ValueError, match="upload URL"):
+        with pytest.raises(AttachmentSourceError, match="no upload URLs"):
             await upload_attachment(
                 "tok", "acct-1", "cmt-1", "a.png", content_base64="QUFB"
             )
+
+
+class TestPresignedUploadHeaders:
+    """Frame.io signs upload URLs with content-type;host;x-amz-acl.
+
+    S3 rejects the PUT with a bare 403 if any signed header is missing, naming none of
+    them. Confirmed empirically: without x-amz-acl the upload 403s, with
+    `x-amz-acl: private` it returns 200.
+    """
+
+    @respx.mock
+    async def test_sends_the_acl_header_s3_signed_for(self):
+        from frameio_mcp.client import FrameIOClient
+
+        route = respx.put(PRESIGNED).mock(return_value=httpx.Response(200))
+
+        await FrameIOClient.upload_to_presigned_url(PRESIGNED, b"bytes", "image/png")
+
+        headers = route.calls.last.request.headers
+        assert headers["x-amz-acl"] == "private"
+        assert headers["content-type"] == "image/png"
+
+    @respx.mock
+    async def test_upload_end_to_end_sends_both_headers(self):
+        put_route = mock_frameio_accepts_attachment()
+
+        await upload_attachment(
+            "tok", "acct-1", "cmt-1", "frame.png", content_base64="QUFB"
+        )
+
+        headers = put_route.calls.last.request.headers
+        assert headers["x-amz-acl"] == "private"

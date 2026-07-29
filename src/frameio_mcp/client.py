@@ -243,11 +243,17 @@ class FrameIOClient:
     async def upload_to_presigned_url(
         url: str, file_bytes: bytes, media_type: str
     ) -> None:
-        """Step 2 of attachment upload: PUT bytes to the presigned URL Frame.io returned."""
+        """Step 2 of attachment upload: PUT bytes to the presigned URL Frame.io returned.
+
+        `x-amz-acl: private` is required, not optional. Frame.io signs these URLs with
+        `X-Amz-SignedHeaders=content-type;host;x-amz-acl`, and S3 rejects the PUT with a
+        bare 403 if any signed header is absent. Omitting it made every attachment upload
+        fail with no indication of which header was missing.
+        """
         async with httpx.AsyncClient(timeout=300.0) as raw:
             resp = await raw.put(
                 url,
                 content=file_bytes,
-                headers={"Content-Type": media_type},
+                headers={"Content-Type": media_type, "x-amz-acl": "private"},
             )
             resp.raise_for_status()
